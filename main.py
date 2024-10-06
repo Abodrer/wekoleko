@@ -36,7 +36,14 @@ def generate_response(input_text):
         input_ids_with_bert = torch.cat((input_ids, bert_embedding_tensor), dim=1)
 
         # توليد الاستجابة
-        response_ids = model_dialo.generate(input_ids_with_bert, max_length=150, pad_token_id=tokenizer_dialo.eos_token_id, temperature=0.7, top_k=50, top_p=0.95)
+        response_ids = model_dialo.generate(
+            input_ids_with_bert, 
+            max_length=150, 
+            pad_token_id=tokenizer_dialo.eos_token_id, 
+            temperature=0.7, 
+            top_k=50, 
+            top_p=0.95
+        )
 
         # فك تشفير الاستجابة
         response = tokenizer_dialo.decode(response_ids[:, input_ids.shape[-1]:][0], skip_special_tokens=True)
