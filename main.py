@@ -1,10 +1,6 @@
 import json
-import numpy as np
-import tensorflow as tf
-from tensorflow.keras.preprocessing.text import Tokenizer
-from tensorflow.keras.preprocessing.sequence import pad_sequences
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Embedding, LSTM
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # 1. تحميل البيانات من ملف JSON
 with open('Training_resources.json', 'r', encoding='utf-8') as file:
@@ -12,34 +8,24 @@ with open('Training_resources.json', 'r', encoding='utf-8') as file:
 
 texts = [item["text"] for item in data]
 
-# 2. إعداد Tokenizer
-tokenizer = Tokenizer()
-tokenizer.fit_on_texts(texts)
-sequences = tokenizer.texts_to_sequences(texts)
+# 2. تحميل DialoGPT
+tokenizer = AutoTokenizer.from_pretrained("microsoft/DialoGPT-medium")
+model = AutoModelForCausalLM.from_pretrained("microsoft/DialoGPT-medium")
 
-# 3. إعداد البيانات
-max_length = max(len(seq) for seq in sequences)
-padded_sequences = pad_sequences(sequences, maxlen=max_length, padding='post')
+# 3. تحسين النموذج باستخدام البيانات
+def generate_response(input_text):
+    # ترميز النص المدخل
+    input_ids = tokenizer.encode(input_text + tokenizer.eos_token, return_tensors='pt')
 
-# 4. إعداد البيانات للتدريب
-# هنا سنقوم بإنشاء تصنيفات عشوائية لتدريب النموذج
-labels = np.random.randint(2, size=len(texts))  # على سبيل المثال، تصنيفات ثنائية
+    # توليد الاستجابة
+    response_ids = model.generate(input_ids, max_length=1000, pad_token_id=tokenizer.eos_token_id)
 
-# 5. بناء النموذج
-model = Sequential()
-model.add(Embedding(input_dim=len(tokenizer.word_index) + 1, output_dim=8, input_length=max_length))
-model.add(LSTM(16))
-model.add(Dense(1, activation='sigmoid'))  # تصنيف ثنائي
+    # فك تشفير الاستجابة
+    response = tokenizer.decode(response_ids[:, input_ids.shape[-1]:][0], skip_special_tokens=True)
+    return response
 
-# 6. تجميع النموذج
-model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-
-# 7. تدريب النموذج
-model.fit(padded_sequences, labels, epochs=10)
-
-# 8. استخدام النموذج
-new_texts = ["I enjoy hiking and exploring new places."]
-new_sequences = tokenizer.texts_to_sequences(new_texts)
-new_padded_sequences = pad_sequences(new_sequences, maxlen=max_length, padding='post')
-predictions = model.predict(new_padded_sequences)
-print(predictions)
+# 4. اختبار النموذج
+for text in texts:
+    response = generate_response(text)
+    print(f"Input: {text}")
+    print(f"Response: {response}\n")
