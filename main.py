@@ -21,18 +21,18 @@ def generate_response(input_text):
         # ترميز النص المدخل باستخدام BERT
         inputs_bert = tokenizer_bert(input_text, return_tensors='pt', truncation=True, padding=True)
         outputs_bert = model_bert(**inputs_bert)
-        
-        # الحصول على تمثيل BERT للنص المدخل
-        bert_embeddings = outputs_bert.last_hidden_state.mean(dim=1)  # يمكن استخدام المتوسط أو أي طريقة أخرى لاستخراج الميزات
 
-        # تحويل تمثيل BERT إلى تنسيق يمكن استخدامه مع DialoGPT
+        # الحصول على تمثيل BERT للنص المدخل
+        bert_embeddings = outputs_bert.last_hidden_state.mean(dim=1)  # استخدام المتوسط لاستخراج الميزات
+
+        # تأكد من تحويل التنسورات إلى LongTensor
         bert_embedding_flattened = bert_embeddings.detach().numpy().flatten()  # جعل التمثيل مسطحاً
-        bert_embedding_tensor = torch.tensor(bert_embedding_flattened).unsqueeze(0)  # إضافة بعد batch
+        bert_embedding_tensor = torch.tensor(bert_embedding_flattened).unsqueeze(0).long()  # تحويل إلى LongTensor
 
         # دمج تمثيل BERT مع النص المدخل لـ DialoGPT
         input_ids = tokenizer_dialo.encode(input_text + tokenizer_dialo.eos_token, return_tensors='pt')
         
-        # دمج التمثيل BERT مع input_ids (يمكنك ضبط ذلك حسب حاجتك)
+        # دمج التمثيل BERT مع input_ids
         input_ids_with_bert = torch.cat((input_ids, bert_embedding_tensor), dim=1)
 
         # توليد الاستجابة
