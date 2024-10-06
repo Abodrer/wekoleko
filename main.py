@@ -51,10 +51,9 @@ with strategy.scope():
         logging_dir='./logs',
         logging_steps=10,
         save_steps=500,
-        evaluation_strategy="steps",
+        evaluation_strategy="steps",  # استخدم هذه القيمة أو قم بتغييرها لـ "epoch" كما تفضل
         save_total_limit=2,
         load_best_model_at_end=True,  # تحميل أفضل نموذج في نهاية التدريب
-        evaluation_strategy="epoch",  # التقييم بعد كل فترة تدريب
         per_device_eval_batch_size=4,  # حجم دفعة التقييم
     )
 
