@@ -1,85 +1,54 @@
-# استيراد المكتبات اللازمة
-import logging
-import json
-from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
-import torch
-from google.colab import files
-from torch.utils.data import Dataset
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Embedding, LSTM
 
-# إعدادات السجل
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-logger = logging.getLogger(__name__)
+# 1. إعداد البيانات
+data = [
+    {"text": "Hi there! I'm Lolly, how are you doing today, my friend?"},
+    {"text": "I'm feeling great, thank you for asking! How about you, my dear friend?"},
+    {"text": "What fun things do you enjoy doing?"},
+    {"text": "I absolutely love reading books and watching amazing movies!"},
+    {"text": "Do you have any recommendations for a good book I should read?"},
+    {"text": "Oh, absolutely! You should read 'One Hundred Years of Solitude' by Gabriel Garcia Marquez. It's a magical journey!"},
+    {"text": "That sounds exciting! Thank you so much for the recommendation!"},
+    {"text": "How do you feel about documentaries? They’re like a window to the world, right?"},
+    {"text": "I love them! They're so full of information. What documentaries spark your interest?"},
+    {"text": "I'm a big fan of the film '13th.' It's such a thought-provoking look at race in America!"}
+]
 
-# تحميل النماذج والـ Tokenizer لـ DialoGPT
-def load_models():
-    # DialoGPT لتحليل السياق
-    dialoGPT_tokenizer = AutoTokenizer.from_pretrained("microsoft/DialoGPT-large")
-    dialoGPT_model = AutoModelForCausalLM.from_pretrained("microsoft/DialoGPT-large")
-    return dialoGPT_tokenizer, dialoGPT_model
+texts = [item["text"] for item in data]
 
-dialoGPT_tokenizer, dialoGPT_model = load_models()
+# 2. إعداد Tokenizer
+tokenizer = Tokenizer()
+tokenizer.fit_on_texts(texts)
+sequences = tokenizer.texts_to_sequences(texts)
 
-# فتح ملف JSON وقراءة البيانات
-def load_training_data(json_file):
-    with open(json_file, 'r', encoding='utf-8') as file:
-        data = json.load(file)
-    return [item['text'] for item in data]
+# 3. إعداد البيانات
+max_length = max(len(seq) for seq in sequences)
+padded_sequences = pad_sequences(sequences, maxlen=max_length, padding='post')
 
-# استبدال "data.json" باسم ملف JSON الذي يحتوي على بيانات التدريب
-training_data = load_training_data('Training_resourcesresources.json')
+# 4. إعداد البيانات للتدريب
+# هنا سنقوم بإنشاء تصنيفات عشوائية لتدريب النموذج
+labels = np.random.randint(2, size=len(texts))  # على سبيل المثال، تصنيفات ثنائية
 
-# تحضير البيانات باستخدام Dataset مخصص
-class ChatDataset(Dataset):
-    def __init__(self, texts, tokenizer):
-        self.input_ids = []
-        self.attention_masks = []
-        
-        for text in texts:
-            encoded = tokenizer(text, return_tensors='pt', padding='max_length', truncation=True, max_length=512)
-            self.input_ids.append(encoded['input_ids'][0])
-            self.attention_masks.append(encoded['attention_mask'][0])
+# 5. بناء النموذج
+model = Sequential()
+model.add(Embedding(input_dim=len(tokenizer.word_index) + 1, output_dim=8, input_length=max_length))
+model.add(LSTM(16))
+model.add(Dense(1, activation='sigmoid'))  # تصنيف ثنائي
 
-    def __len__(self):
-        return len(self.input_ids)
+# 6. تجميع النموذج
+model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 
-    def __getitem__(self, idx):
-        return {
-            'input_ids': self.input_ids[idx],
-            'attention_mask': self.attention_masks[idx]
-        }
+# 7. تدريب النموذج
+model.fit(padded_sequences, labels, epochs=10)
 
-# إنشاء مجموعة البيانات
-chat_dataset = ChatDataset(training_data, dialoGPT_tokenizer)
-
-# إعدادات التدريب
-training_args = TrainingArguments(
-    output_dir='./results',          # حيث سيتم حفظ النتائج
-    num_train_epochs=5,              # عدد الحلقات التدريبية
-    per_device_train_batch_size=4,   # حجم الدفعة (يمكنك زيادته إذا كان لديك موارد كافية)
-    gradient_accumulation_steps=2,    # لتقليل استخدام الذاكرة
-    evaluation_strategy="epoch",      # استراتيجية التقييم
-    logging_dir='./logs',             # حيث سيتم حفظ سجلات التدريب
-    logging_steps=10,
-    save_steps=500,                   # حفظ النموذج كل 500 خطوة
-    load_best_model_at_end=True,      # تحميل أفضل نموذج في نهاية التدريب
-    metric_for_best_model='loss',      # المقياس المستخدم لتحديد أفضل نموذج
-)
-
-# إعداد Trainer
-trainer = Trainer(
-    model=dialoGPT_model,                # النموذج
-    args=training_args,                   # إعدادات التدريب
-    train_dataset=chat_dataset            # مجموعة بيانات التدريب
-)
-
-# بدء التدريب
-trainer.train()
-
-# حفظ النموذج
-model_filename = 'dialoGPT_model.pth'
-torch.save(dialoGPT_model.state_dict(), model_filename)
-
-# تنزيل النموذج
-files.download(model_filename)
-
-print("تم حفظ النموذج وتنزيله بنجاح.")
+# 8. استخدام النموذج
+new_texts = ["I enjoy hiking and exploring new places."]
+new_sequences = tokenizer.texts_to_sequences(new_texts)
+new_padded_sequences = pad_sequences(new_sequences, maxlen=max_length, padding='post')
+predictions = model.predict(new_padded_sequences)
+print(predictions)
