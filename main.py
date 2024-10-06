@@ -1,75 +1,76 @@
 import json
-import tensorflow as tf
-from transformers import AutoModelForCausalLM, AutoTokenizer, TFTrainer, TFTrainingArguments
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
 
-# إعداد TPU
-resolver = tf.distribute.cluster_resolver.TPUClusterResolver()
-tf.config.experimental_connect_to_cluster(resolver)
-tf.tpu.experimental.initialize_tpu_system(resolver)
+# 1. تحميل البيانات من ملف JSON
+try:
+    with open('Training_resources.json', 'r', encoding='utf-8') as file:
+        data = json.load(file)
 
-# إعداد استراتيجية توزيع TPU
-strategy = tf.distribute.TPUStrategy(resolver)
+    # تأكد من أن البيانات تحتوي على نصوص
+    if not all("text" in item for item in data):
+        raise ValueError("تأكد من أن جميع العناصر تحتوي على مفتاح 'text'.")
 
-# تحميل البيانات من ملف JSON
-with open('Training_resources.json', 'r', encoding='utf-8') as file:
-    data = json.load(file)
+    texts = [item["text"] for item in data if "text" in item]
 
-texts = [item["text"] for item in data]
+except FileNotFoundError:
+    print("ملف البيانات غير موجود.")
+    exit()
+except json.JSONDecodeError:
+    print("فشل في قراءة البيانات من ملف JSON.")
+    exit()
 
-# تحميل DialoGPT-large
+# 2. تحميل DialoGPT-large
 tokenizer = AutoTokenizer.from_pretrained("microsoft/DialoGPT-large")
+model = AutoModelForCausalLM.from_pretrained("microsoft/DialoGPT-large")
 
-# تعيين pad_token إلى eos_token
-tokenizer.pad_token = tokenizer.eos_token
+# 3. إعداد بيانات التدريب
+# تحويل النصوص إلى تنسيق مناسب
+train_encodings = tokenizer(texts, truncation=True, padding=True, return_tensors='pt')
 
-# نموذج التدريب
-with strategy.scope():
-    model = AutoModelForCausalLM.from_pretrained("microsoft/DialoGPT-large")
+# 4. إعداد بيانات التدريب
+class ChatDataset(torch.utils.data.Dataset):
+    def __init__(self, encodings):
+        self.encodings = encodings
 
-    # إعداد بيانات التدريب
-    train_encodings = tokenizer(texts, truncation=True, padding=True, return_tensors='tf')
+    def __getitem__(self, idx):
+        return {key: val[idx] for key, val in self.encodings.items()}
 
-    # إعداد بيانات التدريب
-    class ChatDataset(tf.data.Dataset):
-        def __init__(self, encodings):
-            self.encodings = encodings
+    def __len__(self):
+        return len(self.encodings['input_ids'])
 
-        def __getitem__(self, idx):
-            return {key: val[idx] for key, val in self.encodings.items()}
+train_dataset = ChatDataset(train_encodings)
 
-        def __len__(self):
-            return len(self.encodings['input_ids'])
+# 5. إعداد إعدادات التدريب
+training_args = TrainingArguments(
+    output_dir='./results',          # حيث سيتم تخزين النموذج المدرب
+    num_train_epochs=5,              # عدد مرات التكرار
+    per_device_train_batch_size=4,   # حجم الدفعة
+    gradient_accumulation_steps=8,    # تكديس التدرجات
+    learning_rate=5e-5,               # معدل التعلم
+    logging_dir='./logs',            # مكان حفظ السجلات
+    logging_steps=10,
+    save_steps=500,
+    evaluation_strategy="steps",
+    save_total_limit=2,
+)
 
-    train_dataset = ChatDataset(train_encodings)
+# 6. إنشاء المدرب
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=train_dataset,
+)
 
-    # إعداد إعدادات التدريب
-    training_args = TFTrainingArguments(
-        output_dir='./results',
-        num_train_epochs=5,
-        per_device_train_batch_size=4,
-        logging_dir='./logs',
-        logging_steps=10,
-        save_steps=500,
-        evaluation_strategy="steps",
-        save_total_limit=2,
-    )
+# 7. بدء عملية التدريب
+trainer.train()
 
-    # إنشاء المدرب
-    trainer = TFTrainer(
-        model=model,
-        args=training_args,
-        train_dataset=train_dataset,
-    )
+# 8. حفظ النموذج المدرب
+trainer.save_model('./trained_model')
 
-    # بدء عملية التدريب
-    trainer.train()
-
-    # حفظ النموذج المدرب
-    trainer.save_model('./trained_model')
-
-# اختبار النموذج
+# 9. اختبار النموذج
 def generate_response(input_text):
-    input_ids = tokenizer.encode(input_text + tokenizer.eos_token, return_tensors='tf')
+    input_ids = tokenizer.encode(input_text + tokenizer.eos_token, return_tensors='pt')
     response_ids = model.generate(
         input_ids,
         max_length=1000,
@@ -79,10 +80,10 @@ def generate_response(input_text):
         top_p=0.95,
         num_return_sequences=1
     )
-    response = tokenizer.decode(response_ids.numpy()[0], skip_special_tokens=True)
+    response = tokenizer.decode(response_ids[:, input_ids.shape[-1]:][0], skip_special_tokens=True)
     return response
 
-# اختبار النموذج
+# 10. اختبار النموذج
 for text in texts:
     response = generate_response(text)
     print(f"Input: {text}")
