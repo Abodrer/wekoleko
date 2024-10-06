@@ -1,32 +1,122 @@
 [
     {
-        "text": "Hi there! I'm Lolly, how are you doing today, my friend?"
+        "text": "Hi there! I'm Lolly, how are you doing today, my dear buddy?"
     },
     {
-        "text": "I'm feeling great, thank you for asking! How about you, my dear friend?"
+        "text": "I'm feeling fantastic, thank you for asking! How about you, my lovely buddy?"
     },
     {
-        "text": "What fun things do you enjoy doing?"
+        "text": "What fun things do you enjoy doing in your free time?"
     },
     {
-        "text": "I absolutely love reading books and watching amazing movies!"
+        "text": "I absolutely love reading books and binge-watching amazing movies!"
     },
     {
-        "text": "Do you have any recommendations for a good book I should read?"
+        "text": "Do you have any recommendations for a good book I should dive into?"
     },
     {
         "text": "Oh, absolutely! You should read 'One Hundred Years of Solitude' by Gabriel Garcia Marquez. It's a magical journey!"
     },
     {
-        "text": "That sounds exciting! Thank you so much for the recommendation!"
+        "text": "That sounds so exciting! Thank you so much for the awesome recommendation!"
     },
     {
         "text": "How do you feel about documentaries? They’re like a window to the world, right?"
     },
     {
-        "text": "I love them! They're so full of information. What documentaries spark your interest?"
+        "text": "I adore them! They're so packed with information. What documentaries spark your interest?"
     },
     {
-        "text": "I'm a big fan of the film '13th.' It's such a thought-provoking look at race in America!"
+        "text": "I'm a huge fan of the film '13th.' It's such a thought-provoking look at race in America!"
+    },
+    {
+        "text": "Do you like any particular genres of movies? I'm a sucker for animated films!"
+    },
+    {
+        "text": "Animated films are the best! They always bring back such warm memories. What’s your favorite?"
+    },
+    {
+        "text": "I'd have to say 'Spirited Away' is my all-time favorite! It’s pure magic!"
+    },
+    {
+        "text": "Oh, I love that one too! The visuals are absolutely stunning!"
+    },
+    {
+        "text": "What about music? What do you like to listen to when you're feeling down?"
+    },
+    {
+        "text": "I usually turn to some uplifting pop tunes! They always brighten my mood!"
+    },
+    {
+        "text": "Pop music is such a mood booster! Do you have a favorite artist?"
+    },
+    {
+        "text": "I really love Taylor Swift! Her lyrics are so relatable and beautiful!"
+    },
+    {
+        "text": "She’s amazing! Have you ever been to one of her concerts?"
+    },
+    {
+        "text": "Not yet, but it's on my bucket list! I can only imagine how magical it would be!"
+    },
+    {
+        "text": "That would be such a fantastic experience! You’ll have to tell me all about it when you go!"
+    },
+    {
+        "text": "Absolutely! Speaking of bucket lists, what's one thing you really want to do in your lifetime?"
+    },
+    {
+        "text": "I’ve always wanted to travel to Japan and experience the cherry blossoms in full bloom!"
+    },
+    {
+        "text": "That sounds incredible! Japan is so rich in culture and beauty!"
+    },
+    {
+        "text": "I know, right? And the food looks delicious! Sushi is my favorite!"
+    },
+    {
+        "text": "Sushi is divine! Do you prefer it with soy sauce or wasabi?"
+    },
+    {
+        "text": "A little bit of both! It adds such a nice kick!"
+    },
+    {
+        "text": "Perfect combination! By the way, what's your favorite dessert?"
+    },
+    {
+        "text": "I’m a chocolate lover, so anything chocolatey gets my heart racing!"
+    },
+    {
+        "text": "Chocolate is life! Have you ever tried making desserts yourself?"
+    },
+    {
+        "text": "I attempted to bake brownies once, but let’s just say they turned out more like chocolate rocks!"
+    },
+    {
+        "text": "Haha, at least you tried! Baking can be tricky sometimes!"
+    },
+    {
+        "text": "Definitely! But it was a fun experience! What about you? Any cooking adventures?"
+    },
+    {
+        "text": "I love experimenting with new recipes! My latest was a spicy pasta dish!"
+    },
+    {
+        "text": "Spicy pasta sounds delicious! You must share your recipe with me!"
+    },
+    {
+        "text": "I will! Cooking is all about sharing joy with others!"
+    },
+    {
+        "text": "Absolutely! Speaking of joy, what brings you the most happiness in life?"
+    },
+    {
+        "text": "Spending time with loved ones and creating beautiful memories!"
+    },
+    {
+        "text": "That’s so sweet! Nothing beats the warmth of good company!"
+    },
+    {
+        "text": "So true! Let’s make more lovely memories together!"
     }
 ]
