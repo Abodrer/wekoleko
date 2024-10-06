@@ -1,76 +1,28 @@
 import json
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # 1. تحميل البيانات من ملف JSON
 try:
     with open('Training_resources.json', 'r', encoding='utf-8') as file:
         data = json.load(file)
-
-    # تأكد من أن البيانات تحتوي على نصوص
-    if not all("text" in item for item in data):
-        raise ValueError("تأكد من أن جميع العناصر تحتوي على مفتاح 'text'.")
-
-    texts = [item["text"] for item in data if "text" in item]
-
 except FileNotFoundError:
-    print("ملف البيانات غير موجود.")
-    exit()
-except json.JSONDecodeError:
-    print("فشل في قراءة البيانات من ملف JSON.")
+    print("خطأ: لم يتم العثور على ملف Training_resources.json")
     exit()
 
-# 2. تحميل DialoGPT-large
-tokenizer = AutoTokenizer.from_pretrained("microsoft/DialoGPT-large")
-model = AutoModelForCausalLM.from_pretrained("microsoft/DialoGPT-large")
+# استخراج النصوص من البيانات
+texts = [item["text"] for item in data if "text" in item]
 
-# 3. إعداد بيانات التدريب
-# تحويل النصوص إلى تنسيق مناسب
-train_encodings = tokenizer(texts, truncation=True, padding=True, return_tensors='pt')
+# 2. تحميل DialoGPT
+tokenizer = AutoTokenizer.from_pretrained("microsoft/DialoGPT-medium")
+model = AutoModelForCausalLM.from_pretrained("microsoft/DialoGPT-medium", weights_only=True)
 
-# 4. إعداد بيانات التدريب
-class ChatDataset(torch.utils.data.Dataset):
-    def __init__(self, encodings):
-        self.encodings = encodings
-
-    def __getitem__(self, idx):
-        return {key: val[idx] for key, val in self.encodings.items()}
-
-    def __len__(self):
-        return len(self.encodings['input_ids'])
-
-train_dataset = ChatDataset(train_encodings)
-
-# 5. إعداد إعدادات التدريب
-training_args = TrainingArguments(
-    output_dir='./results',          # حيث سيتم تخزين النموذج المدرب
-    num_train_epochs=5,              # عدد مرات التكرار
-    per_device_train_batch_size=4,   # حجم الدفعة
-    gradient_accumulation_steps=8,    # تكديس التدرجات
-    learning_rate=5e-5,               # معدل التعلم
-    logging_dir='./logs',            # مكان حفظ السجلات
-    logging_steps=10,
-    save_steps=500,
-    evaluation_strategy="steps",
-    save_total_limit=2,
-)
-
-# 6. إنشاء المدرب
-trainer = Trainer(
-    model=model,
-    args=training_args,
-    train_dataset=train_dataset,
-)
-
-# 7. بدء عملية التدريب
-trainer.train()
-
-# 8. حفظ النموذج المدرب
-trainer.save_model('./trained_model')
-
-# 9. اختبار النموذج
+# 3. تحسين النموذج باستخدام البيانات
 def generate_response(input_text):
+    # ترميز النص المدخل
     input_ids = tokenizer.encode(input_text + tokenizer.eos_token, return_tensors='pt')
+
+    # توليد الاستجابة مع تحسينات
     response_ids = model.generate(
         input_ids,
         max_length=1000,
@@ -80,10 +32,12 @@ def generate_response(input_text):
         top_p=0.95,
         num_return_sequences=1
     )
+
+    # فك تشفير الاستجابة
     response = tokenizer.decode(response_ids[:, input_ids.shape[-1]:][0], skip_special_tokens=True)
     return response
 
-# 10. اختبار النموذج
+# 4. اختبار النموذج
 for text in texts:
     response = generate_response(text)
     print(f"Input: {text}")
