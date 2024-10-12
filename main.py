@@ -1,92 +1,85 @@
-import json
+import numpy as np
 import tensorflow as tf
-from transformers import AutoModelForCausalLM, AutoTokenizer, TFTrainer, TFTrainingArguments
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Embedding, LSTM, Dense, Bidirectional, Dropout
+from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping
+from tensorflow.keras.initializers import Constant
 
-# إعداد TPU
-resolver = tf.distribute.cluster_resolver.TPUClusterResolver()
-tf.config.experimental_connect_to_cluster(resolver)
-tf.tpu.experimental.initialize_tpu_system(resolver)
+# 1. تحميل البيانات النصية للتدريب
+data = open('stories.txt').read().lower().split("\n")
 
-# إعداد استراتيجية توزيع TPU
-strategy = tf.distribute.TPUStrategy(resolver)
+# 2. تجهيز بيانات النصوص
+tokenizer = Tokenizer()
+tokenizer.fit_on_texts(data)
+total_words = len(tokenizer.word_index) + 1
 
-# تحميل البيانات من ملف JSON
-with open('Training_resources.json', 'r', encoding='utf-8') as file:
-    data = json.load(file)
+input_sequences = []
+for line in data:
+    token_list = tokenizer.texts_to_sequences([line])[0]
+    for i in range(1, len(token_list)):
+        n_gram_sequence = token_list[:i+1]
+        input_sequences.append(n_gram_sequence)
 
-# استخراج النصوص من البيانات
-texts = [item["text"] for item in data]
+max_sequence_len = max([len(x) for x in input_sequences])
+input_sequences = pad_sequences(input_sequences, maxlen=max_sequence_len, padding='pre')
 
-# تحميل DialoGPT-large
-tokenizer = AutoTokenizer.from_pretrained("microsoft/DialoGPT-large")
+X, y = input_sequences[:,:-1], input_sequences[:,-1]
+y = tf.keras.utils.to_categorical(y, num_classes=total_words)
 
-# تعيين pad_token إلى eos_token
-tokenizer.pad_token = tokenizer.eos_token
+# 3. تحميل تمثيلات GloVe
+embeddings_index = {}
+with open('glove.6B.100d.txt', encoding='utf-8') as f:
+    for line in f:
+        values = line.split()
+        word = values[0]
+        coefs = np.asarray(values[1:], dtype='float32')
+        embeddings_index[word] = coefs
 
-# نموذج التدريب
-with strategy.scope():
-    model = AutoModelForCausalLM.from_pretrained("microsoft/DialoGPT-large")
+embedding_dim = 100
+embedding_matrix = np.zeros((total_words, embedding_dim))
+for word, i in tokenizer.word_index.items():
+    embedding_vector = embeddings_index.get(word)
+    if embedding_vector is not None:
+        embedding_matrix[i] = embedding_vector
 
-    # إعداد بيانات التدريب
-    train_encodings = tokenizer(texts, truncation=True, padding=True, return_tensors='tf')
+# 4. بناء النموذج باستخدام Bidirectional LSTM و Dropout
+model = Sequential()
+model.add(Embedding(total_words, embedding_dim, embeddings_initializer=Constant(embedding_matrix), input_length=max_sequence_len-1, trainable=False))
+model.add(Bidirectional(LSTM(150, return_sequences=True)))
+model.add(Dropout(0.2))
+model.add(Bidirectional(LSTM(100)))
+model.add(Dense(total_words, activation='softmax'))
 
-    # إعداد بيانات التدريب
-    class ChatDataset(tf.data.Dataset):
-        def __init__(self, encodings):
-            self.encodings = encodings
+model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
-        def __getitem__(self, idx):
-            return {key: val[idx] for key, val in self.encodings.items()}
+# 5. ضبط معلمات التدريب (التنشيط المبكر وتقليل معدل التعلم)
+reduce_lr = ReduceLROnPlateau(monitor='loss', factor=0.2, patience=5, min_lr=0.001)
+early_stop = EarlyStopping(monitor='loss', patience=10)
 
-        def __len__(self):
-            return len(self.encodings['input_ids'])
+# 6. تدريب النموذج
+model.fit(X, y, epochs=100, batch_size=64, callbacks=[reduce_lr, early_stop], verbose=1)
 
-    train_dataset = ChatDataset(train_encodings)
+# 7. توليد النصوص باستخدام Sampling
+def generate_story(seed_text, next_words, temperature=1.0):
+    for _ in range(next_words):
+        token_list = tokenizer.texts_to_sequences([seed_text])[0]
+        token_list = pad_sequences([token_list], maxlen=max_sequence_len-1, padding='pre')
+        predictions = model.predict(token_list, verbose=0)[0]
 
-    # إعداد إعدادات التدريب
-    training_args = TFTrainingArguments(
-        output_dir='./results',
-        num_train_epochs=5,
-        per_device_train_batch_size=4,
-        logging_dir='./logs',
-        logging_steps=10,
-        save_steps=500,
-        evaluation_strategy="steps",  # استخدم هذه القيمة أو قم بتغييرها لـ "epoch" كما تفضل
-        save_total_limit=2,
-        load_best_model_at_end=True,  # تحميل أفضل نموذج في نهاية التدريب
-        per_device_eval_batch_size=4,  # حجم دفعة التقييم
-    )
+        # استخدام Sampling بدلاً من اختيار الكلمة الأعلى احتمالية دائماً
+        predictions = np.asarray(predictions).astype('float64')
+        predictions = np.log(predictions) / temperature
+        exp_preds = np.exp(predictions)
+        predictions = exp_preds / np.sum(exp_preds)
 
-    # إنشاء المدرب
-    trainer = TFTrainer(
-        model=model,
-        args=training_args,
-        train_dataset=train_dataset,
-    )
+        probas = np.random.multinomial(1, predictions, 1)
+        predicted_word_index = np.argmax(probas)
 
-    # بدء عملية التدريب
-    trainer.train()
+        output_word = tokenizer.index_word[predicted_word_index]
+        seed_text += " " + output_word
+    return seed_text
 
-    # حفظ النموذج المدرب
-    trainer.save_model('./trained_model')
-
-# اختبار النموذج
-def generate_response(input_text):
-    input_ids = tokenizer.encode(input_text + tokenizer.eos_token, return_tensors='tf')
-    response_ids = model.generate(
-        input_ids,
-        max_length=1000,
-        pad_token_id=tokenizer.eos_token_id,
-        temperature=0.7,
-        top_k=50,
-        top_p=0.95,
-        num_return_sequences=1
-    )
-    response = tokenizer.decode(response_ids.numpy()[0], skip_special_tokens=True)
-    return response
-
-# اختبار النموذج
-for text in texts:
-    response = generate_response(text)
-    print(f"Input: {text}")
-    print(f"Response: {response}\n")
+# 8. تجربة إنشاء قصة
+print(generate_story("كان هناك يوم مشرق", 50, temperature=1.0))
