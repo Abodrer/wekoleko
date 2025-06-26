@@ -8,6 +8,7 @@ from io import BytesIO
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import yt_dlp
+from shutil import which  # للتحقق من وجود ffmpeg
 
 # إعداد تسجيل الأخطاء
 logging.basicConfig(filename='bot_errors.log', level=logging.ERROR,
@@ -15,7 +16,6 @@ logging.basicConfig(filename='bot_errors.log', level=logging.ERROR,
 
 
 def sanitize_filename(title):
-    """إزالة الأحرف غير الصالحة من أسماء الملفات."""
     return re.sub(r'[\\/*?:"<>|]', "", title)
 
 
@@ -28,10 +28,11 @@ class MediaBot:
         os.makedirs(self.temp_path, exist_ok=True)
         os.environ["TMPDIR"] = self.temp_path
 
-        # تعيين مسار ملف الكوكيز في جذر مشروع Replit
         self.cookie_file = os.path.join(os.getcwd(), "cookies.txt")
         print(f"مسار ملف الكوكيز: {self.cookie_file}")
         print("هل ملف الكوكيز موجود؟", os.path.isfile(self.cookie_file))
+
+        self.ensure_ffmpeg_installed()  # ← التحقق والتثبيت التلقائي لـ ffmpeg
 
         self.loading_msgs = [
             "جارٍ تحميل الميديا... ⏳",
@@ -40,6 +41,24 @@ class MediaBot:
         ]
 
         self.register_handlers()
+
+    def ensure_ffmpeg_installed(self):
+        try:
+            if which("ffmpeg") is None:
+                print("🔧 ffmpeg غير مثبت. جاري التثبيت...")
+                if os.path.isfile("/data/data/com.termux/files/usr/bin/pkg"):
+                    os.system("pkg update -y && pkg install ffmpeg -y")
+                else:
+                    raise EnvironmentError("❌ ffmpeg غير مثبت ولا يمكن تثبيته تلقائيًا في هذه البيئة.")
+
+                if which("ffmpeg") is None:
+                    raise EnvironmentError("❌ فشل التثبيت التلقائي لـ ffmpeg.")
+                print("✅ تم تثبيت ffmpeg بنجاح.")
+            else:
+                print("✅ ffmpeg مثبت مسبقًا.")
+        except Exception as e:
+            logging.error(f"خطأ أثناء التحقق من ffmpeg: {e}")
+            print(f"⚠️ تحذير: ffmpeg غير متوفر. قد يفشل دمج الصوت/الفيديو.")
 
     def download_thumbnail(self, url):
         try:
@@ -63,7 +82,6 @@ class MediaBot:
             'noplaylist': True,
             'write_thumbnail': file_type in ['mp3', 'mp4'],
         }
-        # إضافة ملف الكوكيز لو موجود
         if os.path.isfile(self.cookie_file):
             base_opts['cookiefile'] = self.cookie_file
 
@@ -216,7 +234,6 @@ class MediaBot:
                 try:
                     ydl_opts = self.get_ydl_opts(file_type, chat_id, info)
 
-                    # تحقق إذا الملف موجود لتجنب التكرار
                     file_pattern = os.path.join(self.download_path, f"{chat_id}_*{sanitized_title}*.*")
                     file_paths = glob.glob(file_pattern)
 
@@ -242,12 +259,10 @@ class MediaBot:
                         self.bot.delete_message(chat_id, loading_msg.message_id)
                         return
 
-                    # تحديث رسائل التحميل
                     for msg in self.loading_msgs[1:]:
                         self.bot.edit_message_text(chat_id=chat_id, message_id=loading_msg.message_id, text=msg)
                         time.sleep(1)
 
-                    # إرسال الملف حسب الصيغة
                     with open(file_path, 'rb') as file:
                         thumb = self.download_thumbnail(info['thumbnail']) if info['thumbnail'] else None
                         if file_type == 'mp4':
